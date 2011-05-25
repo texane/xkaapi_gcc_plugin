@@ -234,6 +234,17 @@ static int register_pragmas(void)
 /* gimple pass
  */
 
+static void print_bind_vars(tree var)
+{
+#ifndef DECL_CHAIN
+# define DECL_CHAIN(__p) TREE_CHAIN(__p)
+#endif
+  for (; var; var = DECL_CHAIN(var))
+  {
+    printf("bind_var %s\n", IDENTIFIER_POINTER(DECL_NAME(var)));
+  }
+}
+
 static unsigned int on_execute_pass(void)
 {
   basic_block bb;
@@ -260,6 +271,14 @@ static unsigned int on_execute_pass(void)
       const_gimple stmt = gsi_stmt(gsi);
       const enum gimple_code code = gimple_code(stmt);
       const char* type = "STMT";
+
+      if (code == GIMPLE_BIND)
+      {
+	printf("BIND {\n");
+	print_bind_vars(gimple_bind_vars(stmt));
+	printf("};\n");
+	continue ;
+      }
 
       if (code == GIMPLE_CALL)
 	type = "CALL";

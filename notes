@@ -1,0 +1,5 @@
+. scope lost in translation (before ssa level)
+-> not possible to use #pragma at the
+beginning of a block. necessary to use
+it just above the given object (ie.
+function, local variable...)
