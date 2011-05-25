@@ -53,11 +53,10 @@ static pragma_expr_t* pragma_exprs;
 
 static pragma_expr_t* alloc_pragma_expr(void)
 {
-  /* TODO */
-  /* pragma_expr_t* const x = malloc(sizeof(pragma_expr_t)); */
-  /* if (x != NULL) x->next = NULL; */
-  /* return x; */
-  return NULL;
+  /* use xmalloc: http://gcc.gnu.org/ml/gcc/2004-09/msg00966.html */
+  pragma_expr_t* const x = xmalloc(sizeof(pragma_expr_t));
+  if (x != NULL) x->next = NULL;
+  return x;
 }
 
 static void add_pragma_expr(pragma_expr_t* x)
@@ -78,9 +77,14 @@ static const pragma_expr_t* find_pragma_expr
   return NULL;
 }
 
-static void free_pragma_exprs(void)
+static void free_pragma_exprs(pragma_expr_t* x)
 {
-  /* todo */
+  while (x)
+  {
+    pragma_expr_t* const tmp = x;
+    x = x->next;
+    free(tmp);
+  }
 }
 
 
@@ -309,25 +313,17 @@ static void register_mein_pass(void)
 /* plugin callbacks
  */
 
-static void on_start_unit
-(void* gcc_data, void* user_data)
-{
-  TRACE();
-}
-
 static void on_finish
 (void* gcc_data, void* user_data)
 {
   TRACE();
+  free_pragma_exprs(pragma_exprs);
 }
 
 static void register_callbacks(void)
 {
 #define PLUGIN_NAME "xkaapi"
-  register_callback
-    (PLUGIN_NAME, PLUGIN_FINISH, on_finish, NULL);
-  register_callback
-    (PLUGIN_NAME, PLUGIN_START_UNIT, on_start_unit, NULL);
+  register_callback(PLUGIN_NAME, PLUGIN_FINISH, on_finish, NULL);
 }
 
 
