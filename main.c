@@ -1,3 +1,5 @@
+#include <stdio.h>
+
 #pragma xkaapi task input(bar)
 static void fu(int bar, int baz)
 {

@@ -98,39 +98,6 @@ static void free_pragma_exprs(pragma_expr_t* x)
    parse_pragma_clause
  */
 
-#if 0 /* unused, tokens not consumed */
-
-static int get_pragma_line
-(struct cpp_reader* reader, unsigned char* bufpos, size_t buflen)
-{
-  /* return a 0 terminated string */
-
-  const struct cpp_token* tok;
-  unsigned char* newpos;
-  size_t toklen;
-
-  while (1)
-  {
-    tok = cpp_get_token(reader);
-    if (tok->type == CPP_PRAGMA_EOL || tok->type == CPP_EOF)
-    {
-      *bufpos = 0;
-      return 0;
-    }
-
-    toklen = cpp_token_len(tok);
-    if (toklen >= buflen) return -1;
-
-    newpos = cpp_spell_token(reader, tok, bufpos, 0);
-    buflen -= (newpos - bufpos);
-    bufpos = newpos;
-  }
-
-  return -1;
-}
-
-#endif /* unused, tokens not consumed */
-
 static int parse_pragma_line
 (struct cpp_reader* reader)
 {
@@ -232,29 +199,21 @@ static int register_pragmas(void)
 
 
 /* gimple pass
+   see gimple-pretty-print.c on how to iterate
  */
-
-static void print_bind_vars(tree var)
-{
-#ifndef DECL_CHAIN
-# define DECL_CHAIN(__p) TREE_CHAIN(__p)
-#endif
-  for (; var; var = DECL_CHAIN(var))
-  {
-    printf("bind_var %s\n", IDENTIFIER_POINTER(DECL_NAME(var)));
-  }
-}
 
 static unsigned int on_execute_pass(void)
 {
   basic_block bb;
   gimple_stmt_iterator gsi;
 
+  printf("-----\n");
+
   TRACE();
 
   if (DECL_NAME(cfun->decl))
   {
-    printf("decl %s\n", IDENTIFIER_POINTER(DECL_NAME(cfun->decl)));
+    printf("decl %s\n", IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(cfun->decl)));
   }
 
   /* locus */
@@ -272,16 +231,33 @@ static unsigned int on_execute_pass(void)
       const enum gimple_code code = gimple_code(stmt);
       const char* type = "STMT";
 
-      if (code == GIMPLE_BIND)
-      {
-	printf("BIND {\n");
-	print_bind_vars(gimple_bind_vars(stmt));
-	printf("};\n");
-	continue ;
-      }
-
       if (code == GIMPLE_CALL)
+      {
+	tree op = gimple_call_fn(stmt);
+	if (TREE_CODE(op) == NON_LVALUE_EXPR)
+	  op = TREE_OPERAND(op, 0);
+
+      call_again:
+	if (TREE_CODE(op) == ADDR_EXPR)
+	{
+	  op = TREE_OPERAND(op, 0);
+	  goto call_again;
+	}
+	else if (TREE_CODE(op) == FUNCTION_DECL)
+	{
+	  if (DECL_NAME(op))
+	  {
+	    printf("CALL<%s>\n", IDENTIFIER_POINTER(DECL_NAME(op)));
+	  }
+	}
+	else
+	{
+	  printf("___%u\n", TREE_CODE(op));
+	}
+
+	/* btw, this is a call */
 	type = "CALL";
+      }
 
       if (gimple_has_location(stmt))
       {
@@ -320,7 +296,8 @@ static void register_mein_pass(void)
 
   /* before the first lowering pass, scope conserved... */
   pass_info.pass = &opt_pass;
-  pass_info.reference_pass_name = "ssa";
+  pass_info.reference_pass_name = "early_optimizations";
+  /* pass_info.reference_pass_name = "ssa"; */
   pass_info.ref_pass_instance_number = 1;
   pass_info.pos_op = PASS_POS_INSERT_BEFORE;
 

@@ -3,3 +3,6 @@
 beginning of a block. necessary to use
 it just above the given object (ie.
 function, local variable...)
+
+. template routines
+-> name not known before instanciation
