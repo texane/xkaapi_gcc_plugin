@@ -125,7 +125,7 @@ static void free_pragma_exprs(void)
 
 
 /* function tracker
-   todo: hash table
+   todo: hash table, gcc splay-trees.h
  */
 
 typedef struct tracked_func
@@ -355,6 +355,8 @@ static void handle_task_call
      call push_task
      remove the call
    */
+
+  /* gimplify_and_add(new_tree, seq); */
 }
 
 static unsigned int on_execute_pass(void)
