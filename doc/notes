@@ -1,3 +1,4 @@
+--
 . template: ok
 -> assembler name used retrieve the mangled name,
 uniquely identifies the template instance with locus
@@ -5,12 +6,20 @@ pointing to the same as the original definition. The
 pragma lookup will thus succeed
 -> unit/template.cc
 
+--
 . scope: todo
 -> unable to retrieve the scope yet
 
+--
 . algorithm
 .. pragma tracking
--> re
+-> during the pragma pass, xkaapi {task,data} pragmas are
+registered along with their location
 
 .. function tracking
-.. code modification
+-> every entered function is tracked if a corresponding
+pragma is found. the lookup is done by (file, line)
+
+.. call code modification
+
+.. variable assigment modification
