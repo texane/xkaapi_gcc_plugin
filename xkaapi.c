@@ -201,6 +201,8 @@ static int parse_pragma_line
   printf("pragma: %s/%u\n", px->file, px->line);
 #endif
 
+#if 0 /* TODO */
+
   while (1)
   {
     /* in cpplib.h */
@@ -242,6 +244,10 @@ static int parse_pragma_line
 
  on_done:
   printf("\n");
+
+#endif /* TODO */
+
+
   return 0;
 }
 
@@ -332,7 +338,9 @@ static void track_pragmed_func
   expr = find_task_pragma_expr(file, line - 1);
   if (expr == NULL) return ;
 
+#if 0 /* debug */
   printf("[x] pragmed function\n");
+#endif
 
   tf = add_tracked_func();
   tf->pragma_expr = expr;
@@ -356,7 +364,10 @@ static unsigned int on_execute_pass(void)
   }
 
   name = IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(cfun->decl));
+
+#if 0 /* debug */
   printf("--- passing on function: %s\n", name);
+#endif
 
   track_pragmed_func(file, line, name);
 
