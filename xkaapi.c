@@ -347,6 +347,12 @@ static void track_pragmed_func
   tf->name = xstrdup(name);
 }
 
+static void handle_task_call
+(const_gimple stmt, const tracked_func_t* tf)
+{
+  /* TODO */
+}
+
 static unsigned int on_execute_pass(void)
 {
   basic_block bb;
@@ -377,33 +383,32 @@ static unsigned int on_execute_pass(void)
     {
       const_gimple stmt = gsi_stmt(gsi);
       const enum gimple_code code = gimple_code(stmt);
-      const char* type = "STMT";
 
       if (code == GIMPLE_CALL)
       {
 	const char* const name = get_called_name(stmt);
 	const tracked_func_t* const tf = find_tracked_func(name);
 
-	printf("CALL");
-	if (tf != NULL) printf("_TASK");
-	printf(": %s()\n", name);
+	printf("CALL%s: %s()\n", tf ? "_TASK" : "", name);
 
-	type = "CALL";
-
-	/* TODO: if find_tracked_function
-	   then change control flow
-	 */
+	if (tf != NULL) handle_task_call(stmt, tf);
       }
 
+#if 0 /* debug */
       if (gimple_has_location(stmt))
       {
 	const location_t loc = gimple_location(stmt);
+
+	const char* type = "STMT";
+	if (code == GIMPLE_CALL)
+
 	printf
 	(
 	 "%s locus: .%s/%u.\n",
 	 type, LOCATION_FILE(loc), LOCATION_LINE(loc)
 	);
       }
+#endif /* debug */
     }
   }
 
