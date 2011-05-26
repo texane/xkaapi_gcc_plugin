@@ -207,14 +207,12 @@ static unsigned int on_execute_pass(void)
   basic_block bb;
   gimple_stmt_iterator gsi;
 
-  printf("-----\n");
-
   TRACE();
 
+  printf("--- passing on function: ");
   if (DECL_NAME(cfun->decl))
-  {
-    printf("decl %s\n", IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(cfun->decl)));
-  }
+    printf("%s", IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(cfun->decl)));
+  printf("\n");
 
   /* locus */
   {
@@ -245,7 +243,11 @@ static unsigned int on_execute_pass(void)
 	}
 	else if (TREE_CODE(op) == FUNCTION_DECL)
 	{
-	  if (DECL_NAME(op))
+	  if (DECL_ASSEMBLER_NAME(op))
+	  {
+	    printf("CALL<%s>\n", IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(op)));
+	  }
+	  else if (DECL_NAME(op))
 	  {
 	    printf("CALL<%s>\n", IDENTIFIER_POINTER(DECL_NAME(op)));
 	  }
