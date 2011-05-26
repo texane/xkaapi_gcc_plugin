@@ -38,11 +38,19 @@ int plugin_is_GPL_compatible;
 /* pragma expression tracker
  */
 
+typedef enum pragma_type
+{
+  PRAGMA_TYPE_TASK = 0,
+  PRAGMA_TYPE_DATA
+} pragma_type_t;
+
 typedef struct pragma_expr
 {
   /* locus */
-  const char* file;
+  char* file;
   unsigned int line;
+
+  pragma_type_t type;
 
   /* datastruct */
   struct pragma_expr* next;
@@ -65,16 +73,39 @@ static void add_pragma_expr(pragma_expr_t* x)
   pragma_exprs = x;
 }
 
+static inline pragma_expr_t* alloc_add_pragma_expr(void)
+{
+  pragma_expr_t* const x = alloc_pragma_expr();
+  if (x != NULL) add_pragma_expr(x);
+  return x;
+}
+
 static const pragma_expr_t* find_pragma_expr
 (const char* file, unsigned int line)
 {
   const pragma_expr_t* x = pragma_exprs;
 
   for (; x; x = x->next)
-    if (x->line == line && !strcmp(x->file, file))
+    if ((x->line == line) && !strcmp(x->file, file))
       return x;
 
   return NULL;
+}
+
+static inline const pragma_expr_t* find_data_pragma_expr
+(const char* file, unsigned int line)
+{
+  const pragma_expr_t* x = find_pragma_expr(file, line);
+  if (x != NULL && x->type != PRAGMA_TYPE_DATA) x = NULL;
+  return x;
+}
+
+static inline const pragma_expr_t* find_task_pragma_expr
+(const char* file, unsigned int line)
+{
+  const pragma_expr_t* x = find_pragma_expr(file, line);
+  if (x != NULL && x->type != PRAGMA_TYPE_TASK) x = NULL;
+  return x;
 }
 
 static void free_pragma_exprs(pragma_expr_t* x)
@@ -83,6 +114,7 @@ static void free_pragma_exprs(pragma_expr_t* x)
   {
     pragma_expr_t* const tmp = x;
     x = x->next;
+    free(tmp->file);
     free(tmp);
   }
 }
@@ -99,25 +131,26 @@ static void free_pragma_exprs(pragma_expr_t* x)
  */
 
 static int parse_pragma_line
-(struct cpp_reader* reader)
+(struct cpp_reader* reader, pragma_type_t type)
 {
-  /* return a 0 terminated string */
+  pragma_expr_t* const px = alloc_add_pragma_expr();
 
-  tree expr;
+  if (px == NULL) return 0;
+  px->type = type;
+  px->file = xstrdup(LOCATION_FILE(input_location));
+  px->line = LOCATION_LINE(input_location);
+
+#if 0 /* debug */
+  printf("pragma: %s/%u\n", px->file, px->line);
+#endif
 
   while (1)
   {
     /* in cpplib.h */
-    const enum cpp_ttype type = pragma_lex(&expr);
+    tree expr;
+    const enum cpp_ttype ttype = pragma_lex(&expr);
 
-    /* locus */
-    {
-      const char* const file = LOCATION_FILE(input_location);
-      const unsigned int line = LOCATION_LINE(input_location);
-      printf("PRAGMA: .%s/%u.\n", file, line);
-    }
-
-    switch (type)
+    switch (ttype)
     {
     case CPP_PRAGMA_EOL:
     case CPP_EOF:
@@ -145,7 +178,7 @@ static int parse_pragma_line
       break ;
 
     default:
-      printf("unk<%u>", type);
+      printf("unk<%u>", ttype);
       break ;
     }
   }
@@ -155,9 +188,10 @@ static int parse_pragma_line
   return 0;
 }
 
-static void handle_common_pragma(struct cpp_reader* reader)
+static void handle_common_pragma
+(struct cpp_reader* reader, pragma_type_t type)
 {
-  if (parse_pragma_line(reader) == -1)
+  if (parse_pragma_line(reader, type) == -1)
   {
     printf("parse_pragma_line() == -1\n");
     return ;
@@ -167,13 +201,13 @@ static void handle_common_pragma(struct cpp_reader* reader)
 static void handle_task_pragma(struct cpp_reader* reader)
 {
   TRACE();
-  handle_common_pragma(reader);
+  handle_common_pragma(reader, PRAGMA_TYPE_TASK);
 }
 
 static void handle_data_pragma(struct cpp_reader* reader)
 {
   TRACE();
-  handle_common_pragma(reader);
+  handle_common_pragma(reader, PRAGMA_TYPE_DATA);
 }
 
 
@@ -202,24 +236,67 @@ static int register_pragmas(void)
    see gimple-pretty-print.c on how to iterate
  */
 
+static const char* get_call_id(const_gimple stmt)
+{
+  /* return the low level, assembler name if possible */
+
+  tree op = gimple_call_fn(stmt);
+
+  if (TREE_CODE(op) == NON_LVALUE_EXPR)
+    op = TREE_OPERAND(op, 0);
+
+ do_again:
+  if (TREE_CODE(op) == ADDR_EXPR)
+  {
+    op = TREE_OPERAND(op, 0);
+    goto do_again;
+  }
+  else if (TREE_CODE(op) == FUNCTION_DECL)
+  {
+    if (DECL_ASSEMBLER_NAME(op))
+      return IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(op));
+    else if (DECL_NAME(op))
+      return IDENTIFIER_POINTER(DECL_NAME(op));
+  }
+
+  return "_anonymous_";
+}
+
+static void track_pragmed_func
+(const char* file, unsigned int line, const char* name)
+{
+  /* look for a corresponding task pragma */
+
+  const pragma_expr_t* expr;
+
+  if (line == 0) return ;
+
+  expr = find_task_pragma_expr(file, line - 1);
+  if (expr == NULL) return ;
+
+  printf("[x] pragmed function\n");
+}
+
 static unsigned int on_execute_pass(void)
 {
   basic_block bb;
   gimple_stmt_iterator gsi;
+  const char* name;
+  const char* file = EXPR_FILENAME(cfun->decl);
+  const unsigned int line = EXPR_LINENO(cfun->decl);
 
   TRACE();
 
-  printf("--- passing on function: ");
-  if (DECL_NAME(cfun->decl))
-    printf("%s", IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(cfun->decl)));
-  printf("\n");
-
-  /* locus */
+  if (DECL_NAME(cfun->decl) == NULL)
   {
-    const char* file = EXPR_FILENAME(cfun->decl);
-    const unsigned int line = EXPR_LINENO(cfun->decl);
-    printf("DECL locus: .%s/%u.\n", file, line);
+    printf("--- skipping anonymous function\n");
+    return 0;
   }
+
+  name = IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(cfun->decl));
+  printf("--- passing on function: %s\n", name);
+
+  track_pragmed_func(file, line, name);
 
   FOR_EACH_BB(bb)
   {
@@ -231,33 +308,8 @@ static unsigned int on_execute_pass(void)
 
       if (code == GIMPLE_CALL)
       {
-	tree op = gimple_call_fn(stmt);
-	if (TREE_CODE(op) == NON_LVALUE_EXPR)
-	  op = TREE_OPERAND(op, 0);
-
-      call_again:
-	if (TREE_CODE(op) == ADDR_EXPR)
-	{
-	  op = TREE_OPERAND(op, 0);
-	  goto call_again;
-	}
-	else if (TREE_CODE(op) == FUNCTION_DECL)
-	{
-	  if (DECL_ASSEMBLER_NAME(op))
-	  {
-	    printf("CALL<%s>\n", IDENTIFIER_POINTER(DECL_ASSEMBLER_NAME(op)));
-	  }
-	  else if (DECL_NAME(op))
-	  {
-	    printf("CALL<%s>\n", IDENTIFIER_POINTER(DECL_NAME(op)));
-	  }
-	}
-	else
-	{
-	  printf("___%u\n", TREE_CODE(op));
-	}
-
-	/* btw, this is a call */
+	const char* const id = get_call_id(stmt);
+	printf("CALL: %s()\n", id);
 	type = "CALL";
       }
 
