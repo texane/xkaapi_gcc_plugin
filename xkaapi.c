@@ -325,6 +325,12 @@ static const char* get_called_name(const_gimple stmt)
   return "_anonymous_";
 }
 
+#if 0 /* todo */
+static void handle_task_decl(void)
+{
+}
+#endif /* todo */
+
 static void track_pragmed_func
 (const char* file, unsigned int line, const char* name)
 {
@@ -345,18 +351,56 @@ static void track_pragmed_func
   tf = add_tracked_func();
   tf->pragma_expr = expr;
   tf->name = xstrdup(name);
+
+  /* todo: handle_task_decl(); */
+}
+
+
+static inline tree create_dummy_adapter(void)
+{
+  /* create function type */
+  static tree type = NULL;
+  static tree decl = NULL;
+
+  if (decl != NULL) return decl;
+
+  /* create the type void fu(void)*/
+  type = build_function_type_list
+    (void_type_node, ptr_type_node, ptr_type_node, NULL_TREE);
+
+  /* create the function decl */
+  decl = build_fn_decl("__xkaapi_dummy_adapter", type);
+
+  return decl;
 }
 
 static void handle_task_call
-(const_gimple stmt, const tracked_func_t* tf)
+(gimple_stmt_iterator gsi, const tracked_func_t* tf)
 {
-  /* TODO
-     build function adapter
-     call push_task
-     remove the call
+  /* iterator points to the call instruction */
+
+  /* . generate the following statement list:
+     generate type T;
+     declare T* var;
+     var = call __xkaapi_pushdata(sizeof(T));
+     foreach args, var->member = local_value;
+     call __xkaapi_pushtask();
+     call __xkaapi_barrier();
+
+     . replace the old_call by newlist
    */
 
-  /* gimplify_and_add(new_tree, seq); */
+  tree dummy_adapter;
+  gimple new_call;
+  tree arg_ptr;
+  tree thread_ptr;
+
+  dummy_adapter = create_dummy_adapter();
+  arg_ptr = build_int_cst(ptr_type_node, 0xdeadbeef);
+  thread_ptr = build_int_cst(ptr_type_node, 0xdeadc003);
+  new_call = gimple_build_call(dummy_adapter, 2, arg_ptr, thread_ptr);
+
+  gsi_replace(&gsi, new_call, true);
 }
 
 static unsigned int on_execute_pass(void)
@@ -397,7 +441,7 @@ static unsigned int on_execute_pass(void)
 
 	printf("CALL%s: %s()\n", tf ? "_TASK" : "", name);
 
-	if (tf != NULL) handle_task_call(stmt, tf);
+	if (tf != NULL) handle_task_call(gsi, tf);
       }
 
 #if 0 /* debug */
@@ -439,7 +483,7 @@ static void register_mein_pass(void)
   opt_pass.properties_provided = 0;
   opt_pass.properties_destroyed = 0;
   opt_pass.todo_flags_start = 0;
-  opt_pass.todo_flags_finish = 0;
+  opt_pass.todo_flags_finish = TODO_dump_func;
 
   /* before the first lowering pass, scope conserved... */
   pass_info.pass = &opt_pass;

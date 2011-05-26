@@ -11,6 +11,11 @@ pragma lookup will thus succeed
 -> unable to retrieve the scope yet
 
 --
+. CtoGIMPLE
+-> from a C function, generate the gimple equivalent
+so that it can be used from inside the plugin
+
+--
 . algorithm
 .. pragma tracking
 -> during the pragma pass, xkaapi {task,data} pragmas are

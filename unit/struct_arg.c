@@ -15,7 +15,7 @@ struct bar
 /* TODO */
 #endif /* generated code */
 
-#pragma xkaapi task input(b)
+#pragma xkaapi task input(b->alpha, b->tri.x)
 static void fu(struct bar* b)
 {
   printf("%s(%d, %d)\n", __FUNCTION__, b->alpha, b->tri.y);

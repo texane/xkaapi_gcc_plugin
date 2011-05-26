@@ -1,5 +1,19 @@
 #include <stdio.h>
 
+
+/* internal builtin function */
+
+#include <stdint.h>
+
+#if defined(__cplusplus)
+extern "C"
+#endif
+void __xkaapi_dummy_adapter(void* args, void* thread)
+{
+  printf("%s(%lx, %lx)\n", __FUNCTION__, (uintptr_t)args, (uintptr_t)thread);
+}
+
+
 #if 0 /* generated code */
 
 struct __xkaapi_fu_args
@@ -8,7 +22,7 @@ struct __xkaapi_fu_args
   int baz;
 };
 
-static void __xkaapi_fu_entry(void* sp)
+static void __xkaapi_fu_entry(void* sp, void* thread)
 {
   struct __xkaapi_args* const args = sp;
   fu(args->bar, args->baz);
@@ -34,7 +48,9 @@ int main(void)
     kaapi_barrier();
   }
 #else /* original code */
+  printf("before_fu\n");
   fu(42, 42);
+  printf("after__fu\n");
 #endif
   return 0;
 }
