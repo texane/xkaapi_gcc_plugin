@@ -108,8 +108,10 @@ static inline const pragma_expr_t* find_task_pragma_expr
   return x;
 }
 
-static void free_pragma_exprs(pragma_expr_t* x)
+static void free_pragma_exprs(void)
 {
+  pragma_expr_t* x = pragma_exprs;
+
   while (x)
   {
     pragma_expr_t* const tmp = x;
@@ -117,6 +119,61 @@ static void free_pragma_exprs(pragma_expr_t* x)
     free(tmp->file);
     free(tmp);
   }
+
+  pragma_exprs = NULL;
+}
+
+
+/* function tracker
+   todo: hash table
+ */
+
+typedef struct tracked_func
+{
+  /* assembler name */
+  char* name;
+
+  /* related pragma expression */
+  const pragma_expr_t* pragma_expr;
+
+  /* datastruct */
+  struct tracked_func* next;
+
+} tracked_func_t;
+
+static tracked_func_t* tracked_funcs;
+
+static inline tracked_func_t* add_tracked_func(void)
+{
+  tracked_func_t* const tf = xmalloc(sizeof(tracked_func_t));
+  tf->next = tracked_funcs;
+  tracked_funcs = tf;
+  return tf;
+}
+
+static const tracked_func_t* find_tracked_func(const char* name)
+{
+  /* find by name */
+
+  const tracked_func_t* pos;
+  for (pos = tracked_funcs; pos; pos = pos->next)
+    if (!strcmp(pos->name, name)) break ;
+  return pos;
+}
+
+static void free_tracked_funcs(void)
+{
+  tracked_func_t* pos = tracked_funcs;
+
+  while (pos)
+  {
+    tracked_func_t* const tmp = pos;
+    pos = pos->next;
+    free(tmp->name);
+    free(tmp);
+  }
+
+  tracked_funcs = NULL;
 }
 
 
@@ -236,7 +293,7 @@ static int register_pragmas(void)
    see gimple-pretty-print.c on how to iterate
  */
 
-static const char* get_call_id(const_gimple stmt)
+static const char* get_called_name(const_gimple stmt)
 {
   /* return the low level, assembler name if possible */
 
@@ -268,6 +325,7 @@ static void track_pragmed_func
   /* look for a corresponding task pragma */
 
   const pragma_expr_t* expr;
+  tracked_func_t* tf;
 
   if (line == 0) return ;
 
@@ -275,6 +333,10 @@ static void track_pragmed_func
   if (expr == NULL) return ;
 
   printf("[x] pragmed function\n");
+
+  tf = add_tracked_func();
+  tf->pragma_expr = expr;
+  tf->name = xstrdup(name);
 }
 
 static unsigned int on_execute_pass(void)
@@ -308,9 +370,18 @@ static unsigned int on_execute_pass(void)
 
       if (code == GIMPLE_CALL)
       {
-	const char* const id = get_call_id(stmt);
-	printf("CALL: %s()\n", id);
+	const char* const name = get_called_name(stmt);
+	const tracked_func_t* const tf = find_tracked_func(name);
+
+	printf("CALL");
+	if (tf != NULL) printf("_TASK");
+	printf(": %s()\n", name);
+
 	type = "CALL";
+
+	/* TODO: if find_tracked_function
+	   then change control flow
+	 */
       }
 
       if (gimple_has_location(stmt))
@@ -360,6 +431,22 @@ static void register_mein_pass(void)
 }
 
 
+/* datastruct initialization
+ */
+
+static void init_datastructs(void)
+{
+  pragma_exprs = NULL;
+  tracked_funcs = NULL;
+}
+
+static void fini_datastructs(void)
+{
+  free_pragma_exprs();
+  free_tracked_funcs();
+}
+
+
 /* plugin callbacks
  */
 
@@ -367,7 +454,7 @@ static void on_finish
 (void* gcc_data, void* user_data)
 {
   TRACE();
-  free_pragma_exprs(pragma_exprs);
+  fini_datastructs();
 }
 
 static void register_callbacks(void)
@@ -394,6 +481,8 @@ int plugin_init
     printf("compiler version does not match\n");
     return 1;
   }
+
+  init_datastructs();
 
   register_callbacks();
   register_pragmas();
