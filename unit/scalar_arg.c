@@ -5,12 +5,29 @@
 
 #include <stdint.h>
 
+static void fu(int, int);
+
+/* struct __xkaapi_fu_args */
+/* { */
+/*   int bar; */
+/*   int baz; */
+/* }; */
+
 #if defined(__cplusplus)
 extern "C"
 #endif
-void __xkaapi_dummy_adapter(void* args, void* thread)
+void __xkaapi_dummy_adapter(void* sp, void* thread)
 {
-  printf("%s(%lx, %lx)\n", __FUNCTION__, (uintptr_t)args, (uintptr_t)thread);
+  void** const args = (void**)sp;
+  printf("%s(%lx, %lx)\n", __FUNCTION__, (uintptr_t)sp, (uintptr_t)thread);
+
+#if 0 /* dont call it yet */
+  fu((int)(uintptr_t)args[0], (int)(uintptr_t)args[1]);
+#else
+  printf("wouldbe_fu: %lx, %lx\n",
+	 (int)(uintptr_t)args[0],
+	 (int)(uintptr_t)args[1]);
+#endif
 }
 
 

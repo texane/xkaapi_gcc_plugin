@@ -355,8 +355,7 @@ static void track_pragmed_func
   /* todo: handle_task_decl(); */
 }
 
-
-static inline tree create_dummy_adapter(void)
+static tree create_dummy_adapter(void)
 {
   /* create function type */
   static tree type = NULL;
@@ -372,6 +371,59 @@ static inline tree create_dummy_adapter(void)
   decl = build_fn_decl("__xkaapi_dummy_adapter", type);
 
   return decl;
+}
+
+static void gen_alloca_stmts(gimple_seq* stmts, tree* sp)
+{
+  /* doc: c-common.c, omp-low.c */
+
+  /* create the stmt sequence so that:
+     *sp = alloca(sizeof(type));
+     type: the type to be stacked
+     stmts: the allocation sequence
+     sp: the allocated area ptr
+   */
+
+  gimple call;
+  tree pos;
+  tree lhs;
+  tree size;
+  tree val;
+  gimple assign;
+  gimple_stmt_iterator gsi;
+
+  *stmts = gimple_seq_alloc();
+  gsi = gsi_start(*stmts);
+
+  printf("--a\n");
+
+  /* size = 2 * sizeof(uintptr_t) */
+  /* uintptr_type_node */
+  sizeuf = TYPE_SIZE(TREE_TYPE(type));
+
+  printf("--a\n");
+
+  /* *sp = __builtin_alloca(size); */
+  call = gimple_build_call(built_in_decls[BUILT_IN_ALLOCA], 1, sizeuf);
+  *sp = create_tmp_var_raw(ptr_type_node, NULL);
+  gimple_add_tmp_var(*sp);
+
+  printf("--a\n");
+
+  gimple_call_set_lhs(call, *sp);
+  gsi_insert_after(&gsi, call, true);
+
+  printf("--a\n");
+
+#if 0
+  /* (*sp)[0] = 42 */
+  val = build_int_cst(ptr_type_node, 0xdeadc003);
+  pos = *sp;
+  assign = gimple_build_assign(pos, val);
+  gsi_insert_after(&gsi, assign, true);
+
+  /* (*sp)[1] = 24 */
+#endif
 }
 
 static void handle_task_call
@@ -391,16 +443,23 @@ static void handle_task_call
    */
 
   tree dummy_adapter;
-  gimple new_call;
-  tree arg_ptr;
+  tree stack_ptr;
   tree thread_ptr;
+  gimple_seq alloca_stmts;
+  gimple call_stmt;
 
+  /* allocate args on the stack */
+  gen_alloca_stmts(&alloca_stmts, &stack_ptr);
+  gsi_insert_seq_before(&gsi, alloca_stmts, false);
+  gimple_seq_free(alloca_stmts);
+
+  /* generate the adapter routine */
   dummy_adapter = create_dummy_adapter();
-  arg_ptr = build_int_cst(ptr_type_node, 0xdeadbeef);
-  thread_ptr = build_int_cst(ptr_type_node, 0xdeadc003);
-  new_call = gimple_build_call(dummy_adapter, 2, arg_ptr, thread_ptr);
 
-  gsi_replace(&gsi, new_call, true);
+  /* call the adapter */
+  thread_ptr = build_int_cst(ptr_type_node, 0xdeadc003);
+  call_stmt = gimple_build_call(dummy_adapter, 2, stack_ptr, thread_ptr);
+  gsi_replace(&gsi, call_stmt, true);
 }
 
 static unsigned int on_execute_pass(void)
