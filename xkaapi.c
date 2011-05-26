@@ -350,7 +350,11 @@ static void track_pragmed_func
 static void handle_task_call
 (const_gimple stmt, const tracked_func_t* tf)
 {
-  /* TODO */
+  /* TODO
+     build function adapter
+     call push_task
+     remove the call
+   */
 }
 
 static unsigned int on_execute_pass(void)
