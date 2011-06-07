@@ -470,7 +470,7 @@ static void handle_task_call
   dummy_adapter = create_dummy_adapter();
 
   /* call the adapter */
-  thread_ptr = build_int_cst(ptr_type_node, 0xdeadc003);
+  thread_ptr = build_int_cst(ptr_type_node, 0xdeadc0c0);
   call_stmt = gimple_build_call(dummy_adapter, 2, stack_ptr, thread_ptr);
   gsi_replace(&gsi, call_stmt, true);
 }
