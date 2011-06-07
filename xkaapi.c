@@ -15,8 +15,11 @@
 #include "gimple.h"
 #include "tree.h"
 #include "tree-pass.h"
+#include "tree-flow.h"
 #include "cpplib.h"
+#include "c-common.h"
 
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -373,9 +376,11 @@ static tree create_dummy_adapter(void)
   return decl;
 }
 
-static void gen_alloca_stmts(gimple_seq* stmts, tree* sp)
+extern tree add_new_static_var (tree type);
+
+static void gen_alloca_stmts(gimple_seq* stmts_, tree* sp_)
 {
-  /* doc: c-common.c, omp-low.c */
+  /* doc: tree-complex.c, c-common.c, omp-low.c */
 
   /* create the stmt sequence so that:
      *sp = alloca(sizeof(type));
@@ -385,45 +390,53 @@ static void gen_alloca_stmts(gimple_seq* stmts, tree* sp)
    */
 
   gimple call;
-  tree pos;
-  tree lhs;
-  tree size;
+  gimple_seq stmts;
+  tree binop;
+  tree mul;
   tree val;
+  tree count;
+  tree sizeuf;
+  tree sp;
+  tree ref;
   gimple assign;
   gimple_stmt_iterator gsi;
 
-  *stmts = gimple_seq_alloc();
-  gsi = gsi_start(*stmts);
+  /* build an empty sequence */
+  stmts = gimple_seq_alloc();
+  gsi = gsi_last(stmts);
 
-  printf("--a\n");
-
-  /* size = 2 * sizeof(uintptr_t) */
-  /* uintptr_type_node */
-  sizeuf = TYPE_SIZE(TREE_TYPE(type));
-
-  printf("--a\n");
-
-  /* *sp = __builtin_alloca(size); */
-  call = gimple_build_call(built_in_decls[BUILT_IN_ALLOCA], 1, sizeuf);
-  *sp = create_tmp_var_raw(ptr_type_node, NULL);
-  gimple_add_tmp_var(*sp);
-
-  printf("--a\n");
-
-  gimple_call_set_lhs(call, *sp);
-  gsi_insert_after(&gsi, call, true);
-
-  printf("--a\n");
-
-#if 0
-  /* (*sp)[0] = 42 */
-  val = build_int_cst(ptr_type_node, 0xdeadc003);
-  pos = *sp;
-  assign = gimple_build_assign(pos, val);
-  gsi_insert_after(&gsi, assign, true);
-
-  /* (*sp)[1] = 24 */
+#if 0 /* fixme */
+  sp = create_tmp_var(ptr_type_node, NULL);
+#else
+  /* from varpool.c */
+  sp = add_new_static_var(ptr_type_node);
 #endif
+
+  /* sp = __builtin_alloca(count * sizeof(uintptr_t)); */
+  count = build_int_cst(integer_type_node, 2);
+  sizeuf = build_int_cst(integer_type_node, sizeof(uintptr_t));
+  mul = build2(MULT_EXPR, integer_type_node, count, sizeuf);
+  call = gimple_build_call(built_in_decls[BUILT_IN_ALLOCA], 1, mul);
+  gimple_call_set_lhs(call, sp);
+  gsi_insert_after(&gsi, call, GSI_CONTINUE_LINKING);
+
+  /* *(sp + 0) = 42; */
+  ref = build1(INDIRECT_REF, TREE_TYPE(sp), sp);
+  val = build_int_cst(ptr_type_node, 0xdeadc0d3);
+  assign = gimple_build_assign(ref, val);
+  gsi_insert_after(&gsi, assign, GSI_CONTINUE_LINKING);
+
+  /* *(sp + 8) = 24 */
+  binop = build_binary_op
+    (0, PLUS_EXPR, convert(integer_type_node, sp), sizeuf, 0);
+  ref = build1(INDIRECT_REF, TREE_TYPE(binop), binop);
+  val = build_int_cst(ptr_type_node, 0xdeadc003);
+  assign = gimple_build_assign(ref, val);
+  gsi_insert_after(&gsi, assign, GSI_CONTINUE_LINKING);
+
+  /* affect results */
+  *sp_ = sp;
+  *stmts_ = stmts;
 }
 
 static void handle_task_call
@@ -450,8 +463,8 @@ static void handle_task_call
 
   /* allocate args on the stack */
   gen_alloca_stmts(&alloca_stmts, &stack_ptr);
-  gsi_insert_seq_before(&gsi, alloca_stmts, false);
-  gimple_seq_free(alloca_stmts);
+  gsi_insert_seq_before(&gsi, alloca_stmts, GSI_SAME_STMT);
+  /* fixme: gimple_seq_free(alloca_stmts); */
 
   /* generate the adapter routine */
   dummy_adapter = create_dummy_adapter();
