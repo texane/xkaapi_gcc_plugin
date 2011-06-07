@@ -38,6 +38,38 @@ int plugin_is_GPL_compatible;
 #endif
 
 
+/* decls initialization
+ */
+
+static tree kaapi_pushdata_aligned_decl = NULL;
+static tree kaapi_pushtask_decl = NULL;
+static tree kaapi_barrier_decl = NULL;
+
+static void init_decls(void)
+{
+  static unsigned int is_once = 0;
+  tree type;
+
+  if (is_once) return ;
+  is_once = 1;
+
+  type = build_function_type_list
+    (ptr_type_node, size_type_node, NULL_TREE);
+  kaapi_pushdata_aligned_decl =
+    build_fn_decl("kaapi_pushdata_aligned", type);
+
+  type = build_function_type_list
+    (void_type_node, ptr_type_node, ptr_type_node, NULL_TREE);
+  kaapi_pushtask_decl =
+    build_fn_decl("kaapi_pushtask", type);
+
+  type = build_function_type_list
+    (void_type_node, void_type_node, NULL_TREE);
+  kaapi_barrier_decl =
+    build_fn_decl("kaapi_barrier", type);
+}
+
+
 /* pragma expression tracker
  */
 
@@ -376,7 +408,7 @@ static tree create_dummy_adapter(void)
   return decl;
 }
 
-extern tree add_new_static_var (tree type);
+extern tree add_new_static_var(tree type);
 
 static void gen_alloca_stmts(gimple_seq* stmts_, tree* sp_)
 {
@@ -416,7 +448,8 @@ static void gen_alloca_stmts(gimple_seq* stmts_, tree* sp_)
   count = build_int_cst(integer_type_node, 2);
   sizeuf = build_int_cst(integer_type_node, sizeof(uintptr_t));
   mul = build2(MULT_EXPR, integer_type_node, count, sizeuf);
-  call = gimple_build_call(built_in_decls[BUILT_IN_ALLOCA], 1, mul);
+  /* call = gimple_build_call(built_in_decls[BUILT_IN_ALLOCA], 1, mul); */
+  call = gimple_build_call(kaapi_pushdata_aligned_decl, 1, mul);
   gimple_call_set_lhs(call, sp);
   gsi_insert_after(&gsi, call, GSI_CONTINUE_LINKING);
 
@@ -451,28 +484,32 @@ static void handle_task_call
      foreach args, var->member = local_value;
      call __xkaapi_pushtask();
      call __xkaapi_barrier();
-
-     . replace the old_call by newlist
    */
 
   tree dummy_adapter;
-  tree stack_ptr;
-  tree thread_ptr;
-  gimple_seq alloca_stmts;
-  gimple call_stmt;
+  tree sp;
+  tree thread;
+  gimple_seq stmts;
+  gimple call;
 
-  /* allocate args on the stack */
-  gen_alloca_stmts(&alloca_stmts, &stack_ptr);
-  gsi_insert_seq_before(&gsi, alloca_stmts, GSI_SAME_STMT);
+  init_decls();
+
+  /* kaapi_pushdata_aligned */
+  gen_alloca_stmts(&stmts, &sp);
+  gsi_insert_seq_before(&gsi, stmts, GSI_SAME_STMT);
   /* fixme: gimple_seq_free(alloca_stmts); */
 
   /* generate the adapter routine */
-  dummy_adapter = create_dummy_adapter();
+  /* dummy_adapter = create_dummy_adapter(); */
 
-  /* call the adapter */
-  thread_ptr = build_int_cst(ptr_type_node, 0xdeadc0c0);
-  call_stmt = gimple_build_call(dummy_adapter, 2, stack_ptr, thread_ptr);
-  gsi_replace(&gsi, call_stmt, true);
+  /* kaapi_pushtask(self_thread, sp); */
+  thread = build_int_cst(ptr_type_node, 0xdeadc0c0);
+  call = gimple_build_call(kaapi_pushtask_decl, 2, sp, thread);
+  gsi_insert_before(&gsi, call, GSI_SAME_STMT);
+
+  /* kaapi_barrier(); */
+  call = gimple_build_call(kaapi_barrier_decl, 0);
+  gsi_replace(&gsi, call, true);
 }
 
 static unsigned int on_execute_pass(void)
@@ -485,7 +522,7 @@ static unsigned int on_execute_pass(void)
 
   TRACE();
 
-  if (DECL_NAME(cfun->decl) == NULL)
+  if (DECL_ASSEMBLER_NAME(cfun->decl) == NULL)
   {
     printf("--- skipping anonymous function\n");
     return 0;

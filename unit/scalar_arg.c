@@ -1,9 +1,9 @@
 #include <stdio.h>
+#include <stdlib.h>
+#include "kaapi.h"
 
 
 /* internal builtin function */
-
-#include <stdint.h>
 
 static void fu(int, int);
 
@@ -47,6 +47,7 @@ static void __xkaapi_fu_entry(void* sp, void* thread)
 
 #endif /* generated code */
 
+
 #pragma xkaapi task input(bar, baz)
 static void fu(int bar, int baz)
 {
@@ -61,12 +62,12 @@ int main(void)
       kaapi_pushdata_aligned(sizeof(struct __xkaapi_fu_args));
     __args->bar = bar;
     __args->baz = baz;
-    kaapi_push_task(kaapi_self_thread(), __args);
-    kaapi_barrier();
+    __kaapi_push_task(kaapi_self_thread(), __args);
+    __kaapi_barrier();
   }
 #else /* original code */
   printf("before_fu\n");
-  fu(42, 42);
+  fu(24, 42);
   printf("after__fu\n");
 #endif
   return 0;
